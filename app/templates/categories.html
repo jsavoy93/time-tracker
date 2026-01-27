@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Categories - Work Time Tracker</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <h1 class="nav-title">⏱️ Work Time Tracker</h1>
+            <div style="display: flex; gap: 1rem; align-items: center;">
+                <button id="themeToggle" class="theme-toggle">🌙 Dark</button>
+                <a href="/" class="nav-link">Dashboard</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <section class="card">
+            <h2>Add New Category</h2>
+            <form method="POST" action="/categories/add" class="form-inline">
+                <input type="text" name="name" placeholder="Category name" required>
+                <button type="submit" class="btn btn-success">Add Category</button>
+            </form>
+            <div id="addError" class="error-message"></div>
+        </section>
+
+        <section class="card">
+            <h2>Existing Categories</h2>
+            {% if categories %}
+                <div class="categories-list">
+                    {% for category in categories %}
+                        <div class="category-item {% if category.is_active == 0 %}inactive{% endif %}">
+                            <div class="category-info">
+                                <strong>{{ category.name }}</strong>
+                                {% if category.is_active == 0 %}
+                                    <span class="badge-inactive">Inactive</span>
+                                {% endif %}
+                            </div>
+                            <div class="category-actions">
+                                <button class="btn btn-sm btn-primary edit-category-btn" data-category-id="{{ category.id }}" data-category-name="{{ category.name }}">
+                                    Edit
+                                </button>
+                                {% if category.is_active == 1 %}
+                                    <form method="POST" action="/categories/{{ category.id }}/delete" style="display:inline;">
+                                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Soft-delete this category?')">
+                                            Deactivate
+                                        </button>
+                                    </form>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="no-data">No categories yet.</p>
+            {% endif %}
+        </section>
+    </div>
+
+    <!-- Edit Category Modal -->
+    <div id="editCategoryModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeEditCategoryModal()">&times;</span>
+            <h2>Edit Category</h2>
+            <form id="editCategoryForm" method="POST" class="form-grid">
+                <div class="form-group">
+                    <label for="editCategoryName">Category Name:</label>
+                    <input type="text" id="editCategoryName" name="name" required>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-success">Save Changes</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeEditCategoryModal()">Cancel</button>
+                </div>
+            </form>
+            <div id="editCategoryError" class="error-message"></div>
+        </div>
+    </div>
+
+    <script src="/static/categories.js"></script>
+</body>
+</html>

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracker</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <h1 class="nav-title">⏱️ Tracker</h1>
+            <div style="display: flex; gap: 1rem; align-items: center;">
+                <button id="themeToggle" class="theme-toggle">🌙 Dark</button>
+                <a href="/categories" class="nav-link">Manage Categories</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- Active Session Display -->
+        <section class="card active-session">
+            <h2>Current Session</h2>
+            {% if active_session %}
+                <div class="session-running">
+                    <p class="elapsed-label">Elapsed Time:</p>
+                    <p class="elapsed-time" id="elapsedTime">00:00:00</p>
+                    <p class="session-category">
+                        Category: <strong>
+                            {% if active_session.category_id %}
+                                {% for cat in categories %}
+                                    {% if cat.id == active_session.category_id %}{{ cat.name }}{% endif %}
+                                {% endfor %}
+                            {% else %}
+                                (No Category)
+                            {% endif %}
+                        </strong>
+                    </p>
+                    <p class="session-description">
+                        Description: <strong>{{ active_session.description or '(None)' }}</strong>
+                    </p>
+                    <p class="session-start">
+                        Started: <code>{{ active_session.start_utc }}</code>
+                    </p>
+                    <form method="POST" action="/stop" class="form-inline">
+                        <button type="submit" class="btn btn-danger btn-lg">Stop Session</button>
+                    </form>
+                </div>
+                <script>
+                    const startTime = "{{ active_session.start_utc }}";
+                    function updateElapsed() {
+                        const start = new Date(startTime);
+                        const now = new Date();
+                        const diff = Math.floor((now - start) / 1000);
+                        const h = String(Math.floor(diff / 3600)).padStart(2, '0');
+                        const m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+                        const s = String(diff % 60).padStart(2, '0');
+                        document.getElementById('elapsedTime').textContent = `${h}:${m}:${s}`;
+                    }
+                    updateElapsed();
+                    setInterval(updateElapsed, 1000);
+                </script>
+            {% else %}
+                <p class="no-session">No session currently running</p>
+            {% endif %}
+        </section>
+
+        <!-- Start New Session -->
+        <section class="card">
+            <h2>Start New Session</h2>
+            <form method="POST" action="/start" class="form-grid">
+                <div class="form-group">
+                    <label for="category">Category:</label>
+                    <select id="category" name="category_id">
+                        <option value="">-- None --</option>
+                        {% for cat in categories %}
+                            <option value="{{ cat.id }}">{{ cat.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="description">Description:</label>
+                    <input type="text" id="description" name="description" placeholder="What are you working on?">
+                </div>
+
+                <button type="submit" class="btn btn-success btn-lg" {% if active_session %}disabled{% endif %}>
+                    Start Session
+                </button>
+            </form>
+        </section>
+
+        <!-- Sessions Table -->
+        <section class="card">
+            <div class="table-header">
+                <h2>Session History</h2>
+                <a href="/export.csv" class="btn btn-sm btn-info">Download CSV</a>
+            </div>
+
+            {% if sessions %}
+                <div class="table-responsive">
+                    <table class="sessions-table">
+                        <thead>
+                            <tr>
+                                <th>Start Time</th>
+                                <th>End Time</th>
+                                <th>Duration</th>
+                                <th>Category</th>
+                                <th>Description</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for session in sessions %}
+                                <tr class="{% if session.is_running %}running{% endif %}">
+                                    <td class="time-cell">
+                                        <code>{{ session.start_utc }}</code>
+                                    </td>
+                                    <td class="time-cell">
+                                        {% if session.end_utc %}
+                                            <code>{{ session.end_utc }}</code>
+                                        {% else %}
+                                            <span class="badge-running">Running</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="duration-cell">
+                                        {{ session.duration or '--' }}
+                                    </td>
+                                    <td>{{ session.category_name }}</td>
+                                    <td>{{ session.description or '(no description)' }}</td>
+                                    <td class="actions-cell">
+                                        <button class="btn btn-sm btn-primary edit-session-btn" data-session-id="{{ session.id }}" data-category-id="{{ session.category_id or '' }}" data-description="{{ session.description or '' }}" data-start-time="{{ session.start_utc }}" data-end-time="{{ session.end_utc or '' }}">
+                                            Edit
+                                        </button>
+                                        {% if not session.is_running %}
+                                            <form method="POST" action="/sessions/{{ session.id }}/delete" style="display:inline;">
+                                                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this session?')">Delete</button>
+                                            </form>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="no-data">No sessions yet. Start one above!</p>
+            {% endif %}
+        </section>
+    </div>
+
+    <!-- Edit Modal -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeEditModal()">&times;</span>
+            <h2>Edit Session</h2>
+            <form id="editForm" method="POST" class="form-grid">
+                <div class="form-group">
+                    <label for="editCategory">Category:</label>
+                    <select id="editCategory" name="category_id">
+                        <option value="">-- None --</option>
+                        {% for cat in categories %}
+                            <option value="{{ cat.id }}">{{ cat.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="editDescription">Description:</label>
+                    <input type="text" id="editDescription" name="description" placeholder="What are you working on?">
+                </div>
+
+                <div class="form-group">
+                    <label for="editStartTime">Start Time (UTC):</label>
+                    <input type="datetime-local" id="editStartTime" name="start_utc" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="editEndTime">End Time (UTC):</label>
+                    <input type="datetime-local" id="editEndTime" name="end_utc">
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-success">Save Changes</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+                </div>
+            </form>
+            <div id="editError" class="error-message"></div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
