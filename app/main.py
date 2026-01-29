@@ -1,5 +1,6 @@
 """FastAPI application for Work Time Tracker."""
 import csv
+import logging
 from io import StringIO
 from datetime import datetime
 from typing import Optional
@@ -13,6 +14,13 @@ from dateutil import parser as date_parser
 
 from app.db import get_db, init_db
 from app.models import Category, Session as SessionModel
+
+# Setup logging for debugging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Initialize database
 init_db()
@@ -176,34 +184,119 @@ def edit_session(
     db: Session = Depends(get_db),
 ):
     """Edit an existing session."""
-    session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    logger.debug(f"=== EDIT SESSION START ===")
+    logger.debug(f"Session ID: {session_id}")
+    logger.debug(f"Raw Input - category_id: {category_id} (type: {type(category_id)})")
+    logger.debug(f"Raw Input - description: {repr(description)}")
+    logger.debug(f"Raw Input - start_utc: {repr(start_utc)}")
+    logger.debug(f"Raw Input - end_utc: {repr(end_utc)}")
+    
+    # Fetch session from database
+    try:
+        session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+        logger.debug(f"Database Query - Session found: {session is not None}")
+        if session:
+            logger.debug(f"  Current session state: id={session.id}, category_id={session.category_id}, "
+                        f"start={session.start_utc}, end={session.end_utc}, desc={repr(session.description)}")
+    except Exception as e:
+        logger.error(f"Database Query - Error fetching session: {type(e).__name__}: {str(e)}", exc_info=True)
+        raise
+    
     if not session:
+        logger.error(f"Session not found for ID: {session_id}")
         raise HTTPException(status_code=404, detail="Session not found.")
     
-    # Validate times
+    # Validate and normalize times
     try:
+        logger.debug(f"Parsing start_utc: {repr(start_utc)}")
         start_dt = date_parser.isoparse(start_utc)
+        logger.debug(f"  Parsed start_dt: {start_dt} (tzinfo: {start_dt.tzinfo})")
+        
+        # Replace timezone info and strip microseconds, then add Z
+        start_dt_clean = start_dt.replace(tzinfo=None, microsecond=0)
+        start_utc_normalized = start_dt_clean.isoformat() + "Z"
+        logger.debug(f"  Normalized start_utc: {start_utc_normalized}")
+        
         if end_utc:
+            logger.debug(f"Parsing end_utc: {repr(end_utc)}")
             end_dt = date_parser.isoparse(end_utc)
+            logger.debug(f"  Parsed end_dt: {end_dt} (tzinfo: {end_dt.tzinfo})")
+            
+            logger.debug(f"Comparing times: end_dt ({end_dt}) <= start_dt ({start_dt})?")
             if end_dt <= start_dt:
+                logger.error(f"Time validation failed: end_dt ({end_dt}) is not after start_dt ({start_dt})")
                 raise HTTPException(status_code=400, detail="End time must be after start time.")
+            
+            # Replace timezone info and strip microseconds, then add Z
+            end_dt_clean = end_dt.replace(tzinfo=None, microsecond=0)
+            end_utc_normalized = end_dt_clean.isoformat() + "Z"
+            logger.debug(f"  Normalized end_utc: {end_utc_normalized}")
+        else:
+            end_utc_normalized = None
+            logger.debug(f"No end_utc provided, setting to None")
+    except HTTPException:
+        logger.error(f"DateTime validation failed - re-raising HTTPException")
+        raise
     except Exception as e:
+        logger.error(f"DateTime parsing error: {type(e).__name__}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=f"Invalid datetime format: {str(e)}")
     
     # Validate category if provided
-    if category_id:
-        cat = get_category_by_id(db, category_id)
-        if not cat:
-            raise HTTPException(status_code=404, detail="Category not found or inactive.")
+    try:
+        if category_id:
+            logger.debug(f"Validating category_id: {category_id}")
+            cat = get_category_by_id(db, category_id)
+            logger.debug(f"  Category lookup result: {cat is not None}")
+            if not cat:
+                logger.error(f"Category validation failed: category_id {category_id} not found or inactive")
+                raise HTTPException(status_code=404, detail="Category not found or inactive.")
+            logger.debug(f"  Category valid: {cat.name}")
+        else:
+            logger.debug(f"No category_id provided, skipping validation")
+    except HTTPException:
+        logger.error(f"Category validation failed - re-raising HTTPException")
+        raise
+    except Exception as e:
+        logger.error(f"Category validation error: {type(e).__name__}: {str(e)}", exc_info=True)
+        raise
     
     # Update session
-    session.category_id = category_id
-    session.description = description or ""
-    session.start_utc = start_utc
-    session.end_utc = end_utc
-    session.updated_utc = datetime.utcnow().isoformat() + "Z"
-    db.commit()
+    try:
+        logger.debug(f"Updating session object...")
+        logger.debug(f"  Setting category_id: {category_id}")
+        session.category_id = category_id
+        
+        logger.debug(f"  Setting description: {repr(description)}")
+        session.description = description or ""
+        
+        logger.debug(f"  Setting start_utc: {start_utc_normalized}")
+        session.start_utc = start_utc_normalized
+        
+        logger.debug(f"  Setting end_utc: {end_utc_normalized}")
+        session.end_utc = end_utc_normalized
+        
+        now = datetime.utcnow().isoformat() + "Z"
+        logger.debug(f"  Setting updated_utc: {now}")
+        session.updated_utc = now
+        
+        logger.debug(f"Updated session object: category_id={session.category_id}, "
+                    f"start={session.start_utc}, end={session.end_utc}, desc={repr(session.description)}")
+    except Exception as e:
+        logger.error(f"Error updating session object: {type(e).__name__}: {str(e)}", exc_info=True)
+        raise
     
+    # Commit to database
+    try:
+        logger.debug(f"Committing session changes to database...")
+        db.commit()
+        logger.info(f"Session {session_id} successfully updated and committed to database")
+    except Exception as e:
+        logger.error(f"Database commit failed: {type(e).__name__}: {str(e)}", exc_info=True)
+        db.rollback()
+        logger.error(f"Transaction rolled back due to commit failure")
+        raise HTTPException(status_code=500, detail=f"Failed to save session: {str(e)}")
+    
+    logger.debug(f"=== EDIT SESSION SUCCESS ===")
     return RedirectResponse(url="/", status_code=303)
 
 

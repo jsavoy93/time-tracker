@@ -35,8 +35,9 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+});
 
-    // Handle edit category button clicks
+// Handle edit category button clicks
 document.addEventListener('DOMContentLoaded', function() {
     const editButtons = document.querySelectorAll('.edit-category-btn');
     editButtons.forEach(button => {
