@@ -5,17 +5,23 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime
 
-# Ensure data directory exists
-DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
-os.makedirs(DATA_DIR, exist_ok=True)
+# Use DATABASE_URL from environment if provided (e.g., Railway PostgreSQL)
+# Otherwise fall back to local SQLite
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-DATABASE_URL = f"sqlite:///{os.path.join(DATA_DIR, 'app.db')}"
-
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    echo=False,
-)
+if DATABASE_URL:
+    # PostgreSQL on Railway (or any PostgreSQL)
+    engine = create_engine(DATABASE_URL, echo=False)
+else:
+    # Local SQLite
+    DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
+    os.makedirs(DATA_DIR, exist_ok=True)
+    DATABASE_URL = f"sqlite:///{os.path.join(DATA_DIR, 'app.db')}"
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False},
+        echo=False,
+    )
 
 SessionLocal = sessionmaker(
     autocommit=False,
