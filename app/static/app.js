@@ -108,6 +108,20 @@ function closeEditCategoryModal() {
     modal.style.display = 'none';
 }
 
+function openImportModal() {
+    const modal = document.getElementById('importModal');
+    const resultDiv = document.getElementById('importResult');
+    resultDiv.innerHTML = '';
+    resultDiv.classList.remove('show');
+    document.getElementById('importData').value = '';
+    modal.style.display = 'block';
+}
+
+function closeImportModal() {
+    const modal = document.getElementById('importModal');
+    modal.style.display = 'none';
+}
+
 // Handle edit form submission
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize theme
@@ -276,7 +290,47 @@ document.addEventListener('DOMContentLoaded', function() {
         if (event.target === editCategoryModal) {
             closeEditCategoryModal();
         }
+
+        const importModal = document.getElementById('importModal');
+        if (event.target === importModal) {
+            closeImportModal();
+        }
     });
+
+    // Handle import form
+    const importForm = document.getElementById('importForm');
+    if (importForm) {
+        importForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(importForm);
+            const resultDiv = document.getElementById('importResult');
+
+            try {
+                const response = await fetch('/import', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    resultDiv.innerHTML = result.message;
+                    resultDiv.className = 'success-message show';
+                    setTimeout(() => {
+                        closeImportModal();
+                        window.location.reload();
+                    }, 1500);
+                } else {
+                    resultDiv.innerHTML = result.detail || 'Import failed';
+                    resultDiv.className = 'error-message show';
+                }
+            } catch (err) {
+                resultDiv.innerHTML = `Error: ${err.message}`;
+                resultDiv.className = 'error-message show';
+            }
+        });
+    }
 });
 
 function showEditError(message) {

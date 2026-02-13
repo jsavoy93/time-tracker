@@ -417,6 +417,77 @@ def export_csv(db: Session = Depends(get_db)):
     )
 
 
+@app.post("/import")
+def import_sessions(
+    csv_data: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Import sessions from CSV data."""
+    try:
+        reader = csv.DictReader(StringIO(csv_data))
+        imported = 0
+        errors = []
+        
+        for row in reader:
+            try:
+                # Parse category
+                category_id = None
+                if row.get("Category") and row["Category"] != "(No Category)":
+                    cat = db.query(Category).filter(Category.name == row["Category"]).first()
+                    if cat:
+                        category_id = cat.id
+                
+                # Parse times
+                start_utc = row.get("Start Time", "").strip()
+                end_utc = row.get("End Time", "").strip() or None
+                
+                if not start_utc:
+                    errors.append(f"Row skipped: missing start time")
+                    continue
+                
+                # Normalize times
+                try:
+                    start_dt = date_parser.isoparse(start_utc)
+                    start_utc = start_dt.replace(tzinfo=None, microsecond=0).isoformat() + "Z"
+                except:
+                    errors.append(f"Row skipped: invalid start time '{start_utc}'")
+                    continue
+                
+                if end_utc:
+                    try:
+                        end_dt = date_parser.isoparse(end_utc)
+                        end_utc = end_dt.replace(tzinfo=None, microsecond=0).isoformat() + "Z"
+                    except:
+                        errors.append(f"Row skipped: invalid end time '{end_utc}'")
+                        continue
+                
+                now = datetime.utcnow().isoformat() + "Z"
+                new_session = SessionModel(
+                    category_id=category_id,
+                    description=row.get("Description", ""),
+                    start_utc=start_utc,
+                    end_utc=end_utc,
+                    created_utc=now,
+                    updated_utc=now,
+                )
+                db.add(new_session)
+                imported += 1
+            except Exception as e:
+                errors.append(f"Row error: {str(e)}")
+        
+        db.commit()
+        
+        msg = f"Imported {imported} sessions."
+        if errors:
+            msg += f" Errors: {'; '.join(errors[:5])}"
+            if len(errors) > 5:
+                msg += f" ... and {len(errors) - 5} more"
+        
+        return {"status": "ok", "message": msg, "imported": imported}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Import failed: {str(e)}")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

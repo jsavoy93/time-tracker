@@ -94,7 +94,10 @@
         <section class="card">
             <div class="table-header">
                 <h2>Session History</h2>
-                <a href="/export.csv" class="btn btn-sm btn-info">Download CSV</a>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-sm btn-secondary" onclick="openImportModal()">Import CSV</button>
+                    <a href="/export.csv" class="btn btn-sm btn-info">Download CSV</a>
+                </div>
             </div>
 
             {% if sessions %}
@@ -186,6 +189,27 @@
                 </div>
             </form>
             <div id="editError" class="error-message"></div>
+        </div>
+    </div>
+
+    <!-- Import Modal -->
+    <div id="importModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeImportModal()">&times;</span>
+            <h2>Import Sessions</h2>
+            <p>Paste your CSV data below. Format:</p>
+            <pre style="background: #f0f0f0; padding: 0.5rem; font-size: 0.8rem;">Category,Description,Start Time,End Time,Duration</pre>
+            <form id="importForm" method="POST" action="/import">
+                <div class="form-group">
+                    <label for="importData">CSV Data:</label>
+                    <textarea id="importData" name="csv_data" rows="10" placeholder="Category,Description,Start Time,End Time,Duration&#10;Coding,Fixed bug,2025-01-26T09:00:00Z,2025-01-26T10:30:00Z,01:30:00" required></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-success">Import</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeImportModal()">Cancel</button>
+                </div>
+            </form>
+            <div id="importResult" class="success-message"></div>
         </div>
     </div>
 
