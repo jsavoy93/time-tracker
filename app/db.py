@@ -1,9 +1,12 @@
 """Database initialization and session management."""
 import os
+import logging
 from datetime import datetime
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime
+
+logger = logging.getLogger(__name__)
 
 # Use DATABASE_URL from environment if provided (e.g., Railway PostgreSQL)
 # Otherwise fall back to local SQLite
@@ -11,9 +14,11 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 if DATABASE_URL:
     # PostgreSQL on Railway (or any PostgreSQL)
-    engine = create_engine(DATABASE_URL, echo=False)
+    logger.info(f"Using PostgreSQL database")
+    engine = create_engine(DATABASE_URL, echo=False, pool_pre_ping=True)
 else:
     # Local SQLite
+    logger.info("Using local SQLite database")
     DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
     os.makedirs(DATA_DIR, exist_ok=True)
     DATABASE_URL = f"sqlite:///{os.path.join(DATA_DIR, 'app.db')}"
